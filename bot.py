@@ -340,7 +340,16 @@ async def handle_message(message: Dict):
 
     # Если упоминание не найдено, проверяем на случайные комментарии
     if not is_mention:
-        logger.info(f"⏭️ Сообщение без упоминания в беседе, проверяем случайные комментарии...")
+        logger.info(f"⏭️ Сообщение без упоминания в беседе, проверяем одиночное 'да'...")
+        
+        # Проверяем одиночное "да" / "da" (реагирует даже без упоминания бота)
+        is_da, da_response = check_single_da_message(clean_text)
+        if is_da:
+            logger.info(f"🪗 Одиночное 'да' без упоминания, отвечаем '{da_response}'")
+            await send_message(user_id, message.get("peer_id"), da_response)
+            return
+        
+        logger.info(f"⏭️ Сообщение без упоминания, проверяем случайные комментарии...")
         
         # Проверяем, стоит ли оставить случайный комментарий
         if random_comments_manager.should_comment(clean_text):
