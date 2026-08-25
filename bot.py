@@ -346,23 +346,9 @@ async def handle_message(message: Dict):
                     logger.info(f"✅ Найдено пересланное сообщение от бота")
                     break
 
-    # Если упоминание не найдено, проверяем на случайные комментарии
+    # Если упоминание не найдено — пропускаем сообщение (случайные комментарии отключены)
     if not is_mention:
-        logger.info(f"⏭️ Сообщение без упоминания в беседе, проверяем случайные комментарии...")
-        
-        # Проверяем, стоит ли оставить случайный комментарий
-        if random_comments_manager.should_comment(clean_text):
-            logger.info(f"💬 Генерируем случайный комментарий для сообщения: {clean_text[:50]}...")
-            random_comment = random_comments_manager.generate_comment(clean_text)
-            
-            if random_comment:
-                logger.info(f"🎲 Случайный комментарий: {random_comment}")
-                # Отправляем случайный комментарий в беседу
-                await send_message(user_id, message.get("peer_id"), random_comment)
-                return
-        
-        # Если нет случайного комментария, полностью пропускаем сообщение
-        logger.info(f"⏭️ Сообщение без упоминания, случайный комментарий не требуется")
+        logger.info(f"⏭️ Сообщение без упоминания, пропускаем (случайные комментарии отключены)")
         return
 
     # Получаем имя пользователя
