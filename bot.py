@@ -261,19 +261,6 @@ async def handle_message(message: Dict):
     if not text or not user_id:
         return
 
-    # Очищаем текст от формата упоминания ВКонтакте
-    clean_text = text
-    for pattern in [f"[club{VK_GROUP_ID}|", "]"]:
-        clean_text = clean_text.replace(pattern, "")
-
-    # === ПРОВЕРКА ОДИНОЧНОГО "ДА" / "DA" (ДО ДЕДУПЛИКАЦИИ — всегда срабатывает) ===
-    if peer_id and peer_id > 2000000000:
-        is_da, da_response = check_single_da_message(clean_text, message_id=message_id)
-        if is_da:
-            logger.info(f"🪗 Одиночное 'да' от {user_id}, отвечаем '{da_response}'")
-            await send_message(user_id, peer_id, da_response)
-            return
-
     # Проверяем на дубликат
     is_duplicate, reason = message_deduplicator.is_duplicate(
         message_id=message_id,
@@ -302,6 +289,18 @@ async def handle_message(message: Dict):
 
     # Это сообщение из беседы
     logger.info(f"💬 Сообщение из беседы: {peer_id}")
+
+    # Очищаем текст от формата упоминания ВКонтакте
+    clean_text = text
+    for pattern in [f"[club{VK_GROUP_ID}|", "]"]:
+        clean_text = clean_text.replace(pattern, "")
+
+    # === ПРОВЕРКА ОДИНОЧНОГО "ДА" / "DA" (ПОСЛЕ ДЕДУПЛИКАЦИИ — один раз на уникальное сообщение) ===
+    is_da, da_response = check_single_da_message(clean_text)
+    if is_da:
+        logger.info(f"🪗 Одиночное 'да' от {user_id}, отвечаем '{da_response}'")
+        await send_message(user_id, peer_id, da_response)
+        return
 
     # Проверяем упоминания
     is_mention = False
