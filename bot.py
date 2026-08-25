@@ -10,6 +10,7 @@ import logging
 import time
 from typing import Dict, Any, Optional
 
+import aiohttp
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,14 +23,7 @@ from user_preferences import user_preferences
 from confirmation_manager import confirmation_manager
 from message_deduplicator import message_deduplicator
 from hostile_responses import hostile_response_manager
-from random_comments import random_comments_manager
 from single_da_detector import check_single_da_message
-
-def safe_log_message(message: str, max_length: int = 100) -> str:
-    """Безопасное логирование сообщений (обрезка длинных URL и текстов)"""
-    if len(message) > max_length:
-        return message[:max_length] + "..."
-    return message
 
 # Настройка логирования
 logging.basicConfig(
@@ -57,6 +51,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Переиспользуемая HTTP-сессия для запросов к VK API
+_vk_session: Optional[aiohttp.ClientSession] = None
+
+
+async def get_vk_session() -> aiohttp.ClientSession:
+    """Возвращает переиспользуемую сессию для VK API"""
+    global _vk_session
+    if _vk_session is None or _vk_session.closed:
+        _vk_session = aiohttp.ClientSession()
+    return _vk_session
+
 
 async def send_message(user_id: int, peer_id: int = None, message: str = None) -> bool:
     """
@@ -70,8 +75,6 @@ async def send_message(user_id: int, peer_id: int = None, message: str = None) -
     Returns:
         True если отправлено успешно
     """
-    import aiohttp
-
     # Определяем получателя
     if peer_id:
         # Отправка в беседу
@@ -90,48 +93,17 @@ async def send_message(user_id: int, peer_id: int = None, message: str = None) -
         "random_id": 0
     }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            f"{VK_API_URL}messages.send",
-            params=params
-        ) as response:
-            data = await response.json()
-            if "error" in data:
-                logger.error(f"Ошибка отправки: {data['error']}")
-                return False
-            logger.info(f"✅ Сообщение отправлено получателю {recipient_id}")
-            return True
-
-
-async def get_user_name(user_id: int) -> str:
-    """
-    Получение имени пользователя ВКонтакте
-
-    Args:
-        user_id: ID пользователя
-
-    Returns:
-        Имя пользователя или "Друг"
-    """
-    import aiohttp
-
-    params = {
-        "user_ids": user_id,
-        "access_token": VK_TOKEN,
-        "v": VK_API_VERSION,
-        "fields": "first_name"
-    }
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            f"{VK_API_URL}users.get",
-            params=params
-        ) as response:
-            data = await response.json()
-            if "response" in data:
-                user = data["response"][0]
-                return user.get("first_name", "Друг")
-    return "Друг"
+    session = await get_vk_session()
+    async with session.post(
+        f"{VK_API_URL}messages.send",
+        params=params
+    ) as response:
+        data = await response.json()
+        if "error" in data:
+            logger.error(f"Ошибка отправки: {data['error']}")
+            return False
+        logger.info(f"✅ Сообщение отправлено получателю {recipient_id}")
+        return True
 
 
 def check_secret_secret_type(event: Dict) -> bool:
@@ -192,15 +164,6 @@ async def hostile_responses_status():
         "description": "Статистика системы резких ответов на негативные сообщения"
     }
 
-@app.get("/random_comments_status")
-async def random_comments_status():
-    """Получение статуса системы случайных комментариев"""
-    stats = random_comments_manager.get_stats()
-    return {
-        "random_comments_stats": stats,
-        "description": "Статистика системы случайных комментариев без упоминаний"
-    }
-
 @app.post("/")
 async def vk_callback(request: Request):
     """
@@ -228,10 +191,6 @@ async def vk_callback(request: Request):
                 logger.info("📋 Инструкции по настройке:")
                 logger.info(confirmation_manager.get_setup_instructions())
                 return PlainTextResponse(content="ok")
-
-        # Проверка секрета (временно отключена для тестирования)
-        # if not check_secret_secret_type(event):
-        #     raise HTTPException(status_code=403, detail="Invalid secret")
 
         # Обработка новых сообщений
         if event_type == "message_new":
@@ -351,10 +310,7 @@ async def handle_message(message: Dict):
         logger.info(f"⏭️ Сообщение без упоминания, пропускаем (случайные комментарии отключены)")
         return
 
-    # Получаем имя пользователя
-    user_name = await get_user_name(user_id)
-
-    logger.info(f"📝 Сообщение от {user_name}: {clean_text}")
+    logger.info(f"📝 Сообщение от пользователя {user_id}: {clean_text}")
 
     # Проверяем команды настройки (только при упоминании)
     setup_response = user_preferences.parse_setup_command(user_id, clean_text)
@@ -374,7 +330,7 @@ async def handle_message(message: Dict):
 
     # Проверяем на агрессивные сообщения
     if hostile_response_manager.is_aggressive_message(clean_text):
-        logger.info(f"⚠️ Обнаружено агрессивное сообщение от {user_name}")
+        logger.info(f"⚠️ Обнаружено агрессивное сообщение от пользователя {user_id}")
         harsh_response = hostile_response_manager.generate_harsh_response()
         if harsh_response:
             logger.info(f"💢 Ответ с агрессией: {harsh_response[:50]}...")
@@ -434,28 +390,26 @@ async def handle_message(message: Dict):
 
 async def main():
     """Запуск бота"""
-    import aiohttp
-
     logger.info("🚀 Запуск бота 'Монолит'...")
 
     # Проверка подключения к VK API
     logger.info("📡 Проверка подключения к ВКонтакте...")
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            f"{VK_API_URL}groups.getById",
-            params={
-                "group_ids": VK_GROUP_ID,
-                "access_token": VK_TOKEN,
-                "v": VK_API_VERSION
-            }
-        ) as response:
-            data = await response.json()
-            if "response" in data and "groups" in data["response"] and data["response"]["groups"]:
-                group = data["response"]["groups"][0]
-                logger.info(f"✅ Подключение к ВКонтакте: '{group.get('name', 'Монолит')}'")
-            else:
-                logger.error(f"❌ Ошибка подключения к VK")
-                return
+    session = await get_vk_session()
+    async with session.get(
+        f"{VK_API_URL}groups.getById",
+        params={
+            "group_ids": VK_GROUP_ID,
+            "access_token": VK_TOKEN,
+            "v": VK_API_VERSION
+        }
+    ) as response:
+        data = await response.json()
+        if "response" in data and "groups" in data["response"] and data["response"]["groups"]:
+            group = data["response"]["groups"][0]
+            logger.info(f"✅ Подключение к ВКонтакте: '{group.get('name', 'Монолит')}'")
+        else:
+            logger.error(f"❌ Ошибка подключения к VK")
+            return
 
     # Проверка подключения к Гигачату
     logger.info("🤖 Проверка подключения к Гигачату...")
@@ -474,7 +428,15 @@ async def main():
     logger.info("💡 Для локального тестирования запустите: ngrok http 8000")
     config = uvicorn.Config(app, host="0.0.0.0", port=port)
     server = uvicorn.Server(config)
-    await server.serve()
+    
+    try:
+        await server.serve()
+    finally:
+        # Закрываем HTTP-сессии при остановке
+        global _vk_session
+        if _vk_session and not _vk_session.closed:
+            await _vk_session.close()
+        await gigachat_client.close()
 
 
 if __name__ == "__main__":

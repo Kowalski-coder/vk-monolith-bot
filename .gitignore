@@ -41,6 +41,7 @@ Thumbs.db
 ngrok
 ngrok-v3-*
 *.tgz
+*.tar.gz
 
 # Docker
 docker-compose.override.yml

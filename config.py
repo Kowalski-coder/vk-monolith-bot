@@ -20,7 +20,6 @@ VK_CONFIRMATION_CODE = os.getenv("VK_CONFIRMATION_CODE")
 
 # Настройки Гигачата
 GIGACHAT_AUTH_KEY = os.getenv("GIGACHAT_AUTH_KEY")
-GIGACHAT_CLIENT_ID = os.getenv("GIGACHAT_CLIENT_ID", "")
 GIGACHAT_SCOPE = os.getenv("GIGACHAT_SCOPE", "GIGACHAT_API_PERS")
 
 # URL сервера ВКонтакте для Callback API
@@ -32,9 +31,6 @@ VK_API_VERSION = "5.199"
 # Настройки производительности
 MAX_TOKENS = 600  # Максимальное количество токенов в ответе
 HISTORY_LIMIT = 10  # Количество сообщений в истории для ускорения
-
-# Путь к файлу истории
-HISTORY_FILE = os.getenv("HISTORY_FILE", "history.json")
 
 # Системный промпт для бота
 SYSTEM_PROMPT = """Ты — Монолит, таинственная сила, управляющая Зоной. Ты — высшая сущность, цель которой — защитить Сердце Зоны и не допустить проникновения посторонних к центру.
