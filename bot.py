@@ -23,6 +23,7 @@ from confirmation_manager import confirmation_manager
 from message_deduplicator import message_deduplicator
 from hostile_responses import hostile_response_manager
 from random_comments import random_comments_manager
+from single_da_detector import check_single_da_message
 
 def safe_log_message(message: str, max_length: int = 100) -> str:
     """Безопасное логирование сообщений (обрезка длинных URL и текстов)"""
