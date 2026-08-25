@@ -268,7 +268,7 @@ async def handle_message(message: Dict):
 
     # === ПРОВЕРКА ОДИНОЧНОГО "ДА" / "DA" (ДО ДЕДУПЛИКАЦИИ — всегда срабатывает) ===
     if peer_id and peer_id > 2000000000:
-        is_da, da_response = check_single_da_message(clean_text)
+        is_da, da_response = check_single_da_message(clean_text, message_id=message_id)
         if is_da:
             logger.info(f"🪗 Одиночное 'да' от {user_id}, отвечаем '{da_response}'")
             await send_message(user_id, peer_id, da_response)
