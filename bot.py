@@ -257,7 +257,23 @@ async def handle_message(message: Dict):
     user_id = message.get("from_id")
     message_date = message.get("date", 0)
     peer_id = message.get("peer_id")
-    
+
+    if not text or not user_id:
+        return
+
+    # Очищаем текст от формата упоминания ВКонтакте
+    clean_text = text
+    for pattern in [f"[club{VK_GROUP_ID}|", "]"]:
+        clean_text = clean_text.replace(pattern, "")
+
+    # === ПРОВЕРКА ОДИНОЧНОГО "ДА" / "DA" (ДО ДЕДУПЛИКАЦИИ — всегда срабатывает) ===
+    if peer_id and peer_id > 2000000000:
+        is_da, da_response = check_single_da_message(clean_text)
+        if is_da:
+            logger.info(f"🪗 Одиночное 'да' от {user_id}, отвечаем '{da_response}'")
+            await send_message(user_id, peer_id, da_response)
+            return
+
     # Проверяем на дубликат
     is_duplicate, reason = message_deduplicator.is_duplicate(
         message_id=message_id,
@@ -265,14 +281,11 @@ async def handle_message(message: Dict):
         user_id=user_id,
         peer_id=peer_id
     )
-    
+
     if is_duplicate:
         logger.info(f"⏭️ Дубликат: {reason}")
         return
-    
-    if not text or not user_id:
-        return
-    
+
     # Проверяем время сообщения (не старше 1 минуты)
     current_time = int(time.time())
     if current_time - message_date > 60:  # 60 секунд = 1 минута
@@ -280,21 +293,16 @@ async def handle_message(message: Dict):
         return
 
     # Проверяем тип сообщения
-    is_conversation = "peer_id" in message and message.get("peer_id", 0) > 2000000000
-    
+    is_conversation = peer_id > 2000000000
+
     if not is_conversation:
         # Личное сообщение - НЕ отвечаем
         logger.info(f"👤 Личное сообщение - пропускаем")
         return
-    
+
     # Это сообщение из беседы
-    logger.info(f"💬 Сообщение из беседы: {message.get('peer_id')}")
-    
-    # Очищаем текст от формата упоминания ВКонтакте (делаем сразу, чтобы использовать везде)
-    clean_text = text
-    for pattern in [f"[club{VK_GROUP_ID}|", "]"]:
-        clean_text = clean_text.replace(pattern, "")
-    
+    logger.info(f"💬 Сообщение из беседы: {peer_id}")
+
     # Проверяем упоминания
     is_mention = False
     
@@ -341,16 +349,7 @@ async def handle_message(message: Dict):
 
     # Если упоминание не найдено, проверяем на случайные комментарии
     if not is_mention:
-        logger.info(f"⏭️ Сообщение без упоминания в беседе, проверяем одиночное 'да'...")
-        
-        # Проверяем одиночное "да" / "da" (реагирует даже без упоминания бота)
-        is_da, da_response = check_single_da_message(clean_text)
-        if is_da:
-            logger.info(f"🪗 Одиночное 'да' без упоминания, отвечаем '{da_response}'")
-            await send_message(user_id, message.get("peer_id"), da_response)
-            return
-        
-        logger.info(f"⏭️ Сообщение без упоминания, проверяем случайные комментарии...")
+        logger.info(f"⏭️ Сообщение без упоминания в беседе, проверяем случайные комментарии...")
         
         # Проверяем, стоит ли оставить случайный комментарий
         if random_comments_manager.should_comment(clean_text):
