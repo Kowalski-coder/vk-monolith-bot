@@ -373,6 +373,20 @@ async def handle_message(message: Dict):
         clean_text, chat_id, personalized_prompt
     )
     
+    # Перехват стандартных отказов GigaChat
+    refusal_keywords = [
+        "gigachat",
+        "языковые модели",
+        "языковая модель",
+        "временно ограничены",
+        "разговоры на чувствительные темы могут быть ограничены"
+    ]
+    for keyword in refusal_keywords:
+        if keyword in response.lower():
+            response = "Отъебись, я не в настроении"
+            logger.info(f"🚫 Перехвачен отказ GigaChat, заменён на 'Отъебись, я не в настроении'")
+            break
+    
     # Для Любови добавляем обращение в начало ответа, если его там нет
     special_name = user_preferences.get_special_name(user_id)
     
