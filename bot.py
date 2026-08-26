@@ -95,7 +95,7 @@ async def send_message(user_id: int, peer_id: int = None, message: str = None, r
     }
 
     if reply_id is not None:
-        params["reply_message"] = json.dumps({"id": reply_id})
+        params["reply_to"] = reply_id
 
     session = await get_vk_session()
     async with session.post(
@@ -249,6 +249,16 @@ async def handle_message(message: Dict):
     reply_id = None
     if "reply_message" in message:
         reply_id = message["reply_message"].get("id")
+        logger.info(f"📌 Найден reply_message id={reply_id}")
+    
+    # Для бесед также проверяем conversation_message_id
+    if not reply_id and "conversation_message_id" in message:
+        reply_id = message.get("conversation_message_id")
+        logger.info(f"📌 Используем conversation_message_id={reply_id}")
+    
+    # Логируем все поля сообщения для отладки
+    logger.info(f"🔍 reply_message в событии: {'есть' if 'reply_message' in message else 'нет'}")
+    logger.info(f"🔍 conversation_message_id: {message.get('conversation_message_id', 'нет')}")
 
     if not is_conversation:
         # Личное сообщение - НЕ отвечаем
