@@ -249,6 +249,7 @@ async def handle_message(message: Dict):
     reply_id = None
     if "reply_message" in message:
         reply_msg = message["reply_message"]
+        logger.info(f"📌 reply_message объект: {json.dumps(reply_msg, ensure_ascii=False)}")
         # В беседах нужно использовать conversation_message_id
         reply_id = reply_msg.get("conversation_message_id") or reply_msg.get("id")
         logger.info(f"📌 reply_message: id={reply_msg.get('id')}, conv_id={reply_msg.get('conversation_message_id')}")
