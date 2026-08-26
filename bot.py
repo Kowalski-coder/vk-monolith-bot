@@ -63,7 +63,7 @@ async def get_vk_session() -> aiohttp.ClientSession:
     return _vk_session
 
 
-async def send_message(user_id: int, peer_id: int = None, message: str = None) -> bool:
+async def send_message(user_id: int, peer_id: int = None, message: str = None, reply_id: int = None) -> bool:
     """
     Отправка сообщения через VK API
 
@@ -71,6 +71,7 @@ async def send_message(user_id: int, peer_id: int = None, message: str = None) -
         user_id: ID пользователя (отправитель)
         peer_id: ID получателя (пользователь или беседа)
         message: Текст сообщения
+        reply_id: ID сообщения, на которое отвечаем (для reply-ответа)
 
     Returns:
         True если отправлено успешно
@@ -92,6 +93,9 @@ async def send_message(user_id: int, peer_id: int = None, message: str = None) -
         "v": VK_API_VERSION,
         "random_id": 0
     }
+
+    if reply_id is not None:
+        params["reply_message"] = json.dumps({"id": reply_id})
 
     session = await get_vk_session()
     async with session.post(
@@ -241,6 +245,11 @@ async def handle_message(message: Dict):
     # Проверяем тип сообщения
     is_conversation = peer_id > 2000000000
 
+    # Извлекаем ID сообщения, на которое дан ответ (для reply)
+    reply_id = None
+    if "reply_message" in message:
+        reply_id = message["reply_message"].get("id")
+
     if not is_conversation:
         # Личное сообщение - НЕ отвечаем
         logger.info(f"👤 Личное сообщение - пропускаем")
@@ -258,7 +267,7 @@ async def handle_message(message: Dict):
     is_da, da_response = check_single_da_message(clean_text)
     if is_da:
         logger.info(f"🪗 Одиночное 'да' от {user_id}, отвечаем '{da_response}'")
-        await send_message(user_id, peer_id, da_response)
+        await send_message(user_id, peer_id, da_response, reply_id=reply_id)
         return
 
     # Проверяем упоминания
@@ -317,7 +326,7 @@ async def handle_message(message: Dict):
     if setup_response:
         logger.info(f"🔧 Выполнена команда настройки: {setup_response}")
         # Отправляем ответ на команду настройки
-        await send_message(user_id, message.get("peer_id"), setup_response)
+        await send_message(user_id, message.get("peer_id"), setup_response, reply_id=reply_id)
         return
     
     # Проверяем команду показа списка настроек (только при упоминании)
@@ -325,7 +334,7 @@ async def handle_message(message: Dict):
         commands_list = user_preferences.list_user_commands()
         logger.info(f"🔧 Показан список команд настройки")
         # Отправляем список команд
-        await send_message(user_id, message.get("peer_id"), commands_list)
+        await send_message(user_id, message.get("peer_id"), commands_list, reply_id=reply_id)
         return
 
     # Проверяем на агрессивные сообщения
@@ -334,7 +343,7 @@ async def handle_message(message: Dict):
         harsh_response = hostile_response_manager.generate_harsh_response()
         if harsh_response:
             logger.info(f"💢 Ответ с агрессией: {harsh_response[:50]}...")
-            await send_message(user_id, message.get("peer_id"), harsh_response)
+            await send_message(user_id, message.get("peer_id"), harsh_response, reply_id=reply_id)
             return
         else:
             logger.info(f"⏰ Агрессивный ответ отклонён (кулдаун)")
@@ -385,7 +394,7 @@ async def handle_message(message: Dict):
     history_manager.add_message(chat_id, "assistant", response)
 
     # Отправляем ответ в беседу
-    await send_message(user_id, message.get("peer_id"), response)
+    await send_message(user_id, message.get("peer_id"), response, reply_id=reply_id)
 
 
 async def main():
