@@ -250,18 +250,8 @@ async def handle_message(message: Dict):
     # Проверяем тип сообщения
     is_conversation = peer_id > 2000000000
 
-    # Извлекаем ID сообщения, на которое дан ответ (для reply)
-    reply_id = None
-    if "reply_message" in message:
-        reply_msg = message["reply_message"]
-        logger.info(f"📌 reply_message объект: {json.dumps(reply_msg, ensure_ascii=False)}")
-        # В беседах нужно использовать conversation_message_id
-        reply_id = reply_msg.get("conversation_message_id") or reply_msg.get("id")
-        logger.info(f"📌 reply_message: id={reply_msg.get('id')}, conv_id={reply_msg.get('conversation_message_id')}")
-    
-    # Логируем все поля сообщения для отладки
-    logger.info(f"🔍 reply_message в событии: {'есть' if 'reply_message' in message else 'нет'}")
-    logger.info(f"🔍 conversation_message_id: {message.get('conversation_message_id', 'нет')}")
+    # Извлекаем ID сообщения пользователя для reply (ID сообщения в беседе)
+    reply_id = message.get("conversation_message_id")
 
     if not is_conversation:
         # Личное сообщение - НЕ отвечаем
