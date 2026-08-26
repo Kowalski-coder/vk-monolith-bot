@@ -95,7 +95,12 @@ async def send_message(user_id: int, peer_id: int = None, message: str = None, r
     }
 
     if reply_id is not None:
-        params["reply_to"] = reply_id
+        forward_payload = json.dumps({
+            "peer_id": recipient_id,
+            "conversation_message_ids": [reply_id],
+            "is_reply": True
+        })
+        params["forward"] = forward_payload
 
     session = await get_vk_session()
     async with session.post(
